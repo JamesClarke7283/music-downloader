@@ -3,12 +3,10 @@ from typing import Optional, Union, List
 from enum import Enum
 from playhouse.migrate import *
 
-# third party modules
-from peewee import (
-    SqliteDatabase,
-    MySQLDatabase,
-    PostgresqlDatabase,
-)
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy_utils import create_database, database_exists
 
 # own modules
 from . import (
@@ -23,9 +21,38 @@ class DatabaseType(Enum):
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
 
-class Database:
-    database: Union[SqliteDatabase, PostgresqlDatabase, MySQLDatabase]
 
+Base = declarative_base()
+
+
+class Album(Base):
+    __tablename__ = 'album'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    artist_id = Column(Integer, ForeignKey('artist.id'))
+    artist = relationship("Artist", back_populates="albums")
+    songs = relationship("Song", back_populates="album")
+
+
+class Artist(Base):
+    __tablename__ = 'artist'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    albums = relationship("Album", back_populates="artist")
+    songs = relationship("Song", back_populates="artist")
+
+
+class Song(Base):
+    __tablename__ = 'song'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    album_id = Column(Integer, ForeignKey('album.id'))
+    album = relationship("Album", back_populates="songs")
+    artist_id = Column(Integer, ForeignKey('artist.id'))
+    artist = relationship("Artist", back_populates="songs")
+
+
+class Database:
     def __init__(
             self,
             db_type: DatabaseType,
@@ -44,145 +71,39 @@ class Database:
 
         self.initialize_database()
 
-    def create_database(self) -> Union[SqliteDatabase, PostgresqlDatabase, MySQLDatabase]:
-        """Create a database instance based on the configured database type and parameters.
+    def create_engine(self) -> create_engine:
+        """Create an engine instance based on the configured database type and parameters.
 
         Returns:
-            The created database instance, or None if an invalid database type was specified.
+            The created engine instance, or None if an invalid database type was specified.
         """
 
-        # SQLITE
         if self.db_type == DatabaseType.SQLITE:
-            return SqliteDatabase(self.db_name)
+            return create_engine(f'sqlite:///{self.db_name}')
 
-        # POSTGRES
         if self.db_type == DatabaseType.POSTGRESQL:
-            return PostgresqlDatabase(
-                self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            )
+            connection_string = f'postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}'
+            return create_engine(connection_string)
 
-        # MYSQL
         if self.db_type == DatabaseType.MYSQL:
-            return MySQLDatabase(
-                self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            )
+            connection_string = f'mysql+pymysql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}'
+            return create_engine(connection_string)
 
         raise ValueError("Invalid database type specified.")
 
-
-    @property
-    def migrator(self) -> SchemaMigrator:
-        if self.db_type == DatabaseType.SQLITE:
-            return SqliteMigrator(self.database)
-        
-        if self.db_type == DatabaseType.MYSQL:
-            return MySQLMigrator(self.database)
-    
-        if self.db_type == DatabaseType.POSTGRESQL:
-            return PostgresqlMigrator(self.database)
-
     def initialize_database(self):
         """
-        Connect to the database
-        initialize the previously defined databases
+        Connect to the database,
+        initialize the previously defined databases,
         create tables if they don't exist.
         """
-        self.database = self.create_database()
-        self.database.connect()
-        
-        migrator = self.migrator
-        
-        for model in data_models.ALL_MODELS:
-            model = model.Use(self.database)
-            
-            if self.database.table_exists(model):
-                migration_operations = [
-                    migrator.add_column(
-                        "some field", field[0], field[1]
-                    )
-                    for field in model._meta.fields.items()
-                ]
-                
-                migrate(*migration_operations)
-            else:
-                self.database.create_tables([model], safe=True)
 
-        #self.database.create_tables([model.Use(self.database) for model in data_models.ALL_MODELS], safe=True)
+        engine = self.create_engine()
 
-        """
-        upgrade old databases. 
-        If a collumn has been added in a new version this adds it to old Tables, 
-        without deleting the data in legacy databases
-        """
-        
-        for model in data_models.ALL_MODELS:
-            model = model.Use(self.database)
-            
-            
-            
-            print(model._meta.fields)
+        if not database_exists(engine.url):
+            create_database(engine.url)
 
-    def push(self, database_object: objects.MusicObject):
-        """
-        Adds a new music object to the database using the corresponding method from the `write` session.
-        When possible, rather use the `push_many` function.
-        This gets even more important, when using a remote database server.
+        Session = sessionmaker(bind=engine)
+        session = Session()
 
-        Args:
-            database_object (objects.MusicObject): The music object to add to the database.
-
-        Returns:
-            The newly added music object.
-        """
-
-        with write.WritingSession(self.database) as writing_session:
-            if isinstance(database_object, objects.Song):
-                return writing_session.add_song(database_object)
-            
-            if isinstance(database_object, objects.Album):
-                return writing_session.add_album(database_object)
-            
-            if isinstance(database_object, objects.Artist):
-                return writing_session.add_artist(database_object)
-
-    def push_many(self, database_objects: List[objects.MusicObject]) -> None:
-        """
-        Adds a list of MusicObject instances to the database.
-        This function sends only needs one querry for each type of table added.
-        Beware that if you have for example an object like this:
-        - Album
-        - Song
-        - Song
-        you already have 3 different Tables.
-    
-        Unlike the function `push`, this function doesn't return the added database objects.
-
-        Args:
-            database_objects: List of MusicObject instances to be added to the database.
-        """
-
-        with write.WritingSession(self.database) as writing_session:
-            for obj in database_objects:
-                if isinstance(obj, objects.Song):
-                    writing_session.add_song(obj)
-                    continue
-                
-                if isinstance(obj, objects.Album):
-                    writing_session.add_album(obj)
-                    continue
-                
-                if isinstance(obj, objects.Artist):
-                    writing_session.add_artist(obj)
-                    continue
-
-
-    def __del__(self):
-        self.database.close()
+        Base.metadata.create_all(engine)
