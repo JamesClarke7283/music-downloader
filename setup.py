@@ -25,7 +25,9 @@ install_requires = [
     "pydub~=0.25.1",
     "youtube_dl", 
     "beautifulsoup4~=4.11.1", 
-    "pycountry~=22.3.5"
+    "pycountry~=22.3.5",
+    "SQLalchemy~=2.0.7",
+    "sqlalchemy-utils~=0.40.0"
 ]
 
 with open("requirements.txt", "r") as requirements_txt:

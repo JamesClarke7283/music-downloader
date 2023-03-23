@@ -1,15 +1,8 @@
 from typing import List, Union, Type, Optional
-from peewee import (
-    SqliteDatabase,
-    PostgresqlDatabase,
-    MySQLDatabase,
-    Model,
-    CharField,
-    IntegerField,
-    BooleanField,
-    ForeignKeyField,
-    TextField
-)
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy_utils import create_database, database_exists
 
 """
 **IMPORTANT**:
@@ -22,28 +15,42 @@ while keeping the data of the old ones.
 EVEN if that means to for example keep decimal values stored in strings.
 (not in my codebase though.)
 """
+Base = declarative_base()
 
 
-class BaseModel(Model):
-    notes: str = CharField(null=True)
+class Album(Base):
+    __tablename__ = 'album'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    artist_id = Column(Integer, ForeignKey('artist.id'))
+    artist = relationship("Artist", back_populates="albums")
+    songs = relationship("Song", back_populates="album")
 
-    class Meta:
-        database = None
 
-    @classmethod
-    def Use(cls, database: Union[SqliteDatabase, PostgresqlDatabase, MySQLDatabase]) -> Model:
-        cls._meta.database = database
-        return cls
+class Artist(Base):
+    __tablename__ = 'artist'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    albums = relationship("Album", back_populates="artist")
+    songs = relationship("Song", back_populates="artist")
 
-    def use(self, database: Union[SqliteDatabase, PostgresqlDatabase, MySQLDatabase]) -> Model:
-        self._meta.database = database
-        return self
 
-class ObjectModel(BaseModel):
-    id: str = CharField(primary_key=True)
+class Song(Base):
+    __tablename__ = 'song'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    album_id = Column(Integer, ForeignKey('album.id'))
+    album = relationship("Album", back_populates="songs")
+    artist_id = Column(Integer, ForeignKey('artist.id'))
+    artist = relationship("Artist", back_populates="songs")
 
-class MainModel(BaseModel):
-    additional_arguments: str = CharField(null=True)
+
+class ObjectModel(Base):
+    id: str = Column(String(), primary_key=True)
+
+
+class MainModel(Base):
+    additional_arguments: str = Column(String(), nullable=True)
     notes: str = CharField(null=True)
 
 
