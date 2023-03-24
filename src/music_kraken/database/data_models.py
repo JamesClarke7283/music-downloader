@@ -1,5 +1,5 @@
 from typing import List, Union, Type, Optional
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, Boolean, String, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy_utils import create_database, database_exists
@@ -18,96 +18,72 @@ EVEN if that means to for example keep decimal values stored in strings.
 Base = declarative_base()
 
 
-class Album(Base):
-    __tablename__ = 'album'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    artist_id = Column(Integer, ForeignKey('artist.id'))
-    artist = relationship("Artist", back_populates="albums")
-    songs = relationship("Song", back_populates="album")
-
-
-class Artist(Base):
-    __tablename__ = 'artist'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    albums = relationship("Album", back_populates="artist")
-    songs = relationship("Song", back_populates="artist")
-
-
-class Song(Base):
-    __tablename__ = 'song'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    album_id = Column(Integer, ForeignKey('album.id'))
-    album = relationship("Album", back_populates="songs")
-    artist_id = Column(Integer, ForeignKey('artist.id'))
-    artist = relationship("Artist", back_populates="songs")
-
-
 class ObjectModel(Base):
     id: str = Column(String(), primary_key=True)
 
 
 class MainModel(Base):
     additional_arguments: str = Column(String(), nullable=True)
-    notes: str = CharField(null=True)
+    notes: str = Column(String(), nullable=True)
 
 
 class Song(MainModel):
     """A class representing a song in the music database."""
-
-    title: str = CharField(null=True)
-    isrc: str = CharField(null=True)
-    length: int = IntegerField(null=True)
-    tracksort: int = IntegerField(null=True)
-    genre: str = CharField(null=True)
+    __tablename__ = "songs"
+    id: int = Column(Integer(), primary_key=True)
+    title: str = Column(String(), nullable=True)
+    isrc: str = Column(String(),nullable=True)
+    length: int = Column(Integer(),nullable=True)
+    tracksort: int = Column(Integer(),nullable=True)
+    genre: str = Column(String(),nullable=True)
     
 
 class Album(MainModel):
     """A class representing an album in the music database."""
-
-    title: str = CharField(null=True)
-    album_status: str = CharField(null=True)
-    album_type: str = CharField(null=True)
-    language: str = CharField(null=True)
-    date_string: str = CharField(null=True)
-    date_format: str = CharField(null=True)
-    barcode: str = CharField(null=True)
-    albumsort: int = IntegerField(null=True)
+    __tablename__ = "albums"
+    id: int = Column(Integer(), primary_key=True)
+    title: str = Column(Integer(), nullable=True)
+    album_status: str = Column(String(), nullable=True)
+    album_type: str = Column(String(), nullable=True)
+    language: str = Column(String(), nullable=True)
+    date_string: str = Column(String(), nullable=True)
+    date_format: str = Column(String(), nullable=True)
+    barcode: str = Column(String(), nullable=True)
+    albumsort: int = Column(Integer(), nullable=True)
 
 
 class Artist(MainModel):
     """A class representing an artist in the music database."""
-
-    name: str = CharField(null=True)
-    country: str = CharField(null=True)
-    formed_in_date: str = CharField(null=True)
-    formed_in_format: str = CharField(null=True)
-    general_genre: str = CharField(null=True)
+    id: int = Column(Integer(), primary_key=True)
+    name: str = Column(String(), nullable=True)
+    country: str = Column(String(), nullable=True)
+    formed_in_date: str = Column(String(), nullable=True)
+    formed_in_format: str = Column(String(), nullable=True)
+    general_genre: str = Column(String(), nullable=True)
 
 
 class Label(MainModel):
-    name: str = CharField(null=True)
+    id: int = Column(Integer(), primary_key=True) 
+    name: str = Column(String(), nullable=True)
 
 
 class Target(ObjectModel):
     """A class representing a target of a song in the music database."""
-
-    file: str = CharField()
-    path: str = CharField()
-    song = ForeignKeyField(Song, backref='targets')
+    __tablename__ = "targets"
+    file: str = Column(String())
+    path: str = Column(String())
+    song: Song = Column(ForeignKey("songs.id"))
 
 
 class Lyrics(ObjectModel):
     """A class representing lyrics of a song in the music database."""
+    __tablename__ = "lyrics"
+    text: str = Column(Text())
+    language: str = Column(String())
+    song: Song = Column(ForeignKey("songs.id"))
 
-    text: str = TextField()
-    language: str = CharField()
-    song = ForeignKeyField(Song, backref='lyrics')
 
-
-class Source(BaseModel):
+class Source(Base):
     """A class representing a source of a song in the music database."""
     ContentTypes = Union[Song, Album, Artist, Lyrics]
 
@@ -132,7 +108,6 @@ class Source(BaseModel):
         if self.content_type == 'Lyrics':
             return Lyrics.get(Lyrics.id == self.content_id)
         
-
     @content_object.setter
     def content_object(self, value: Union[Song, Album, Artist]) -> None:
         """Set the content associated with the source as an object."""
@@ -140,35 +115,36 @@ class Source(BaseModel):
         self.content_id = value.id
 
 
-class SongArtist(BaseModel):
+class SongArtist(Base):
     """A class representing the relationship between a song and an artist."""
+    __tablename__ = "song_artists"
+    id: int = Column(Integer(), primary_key=True)
+    song: Song = Column(ForeignKey("songs.id"))
+    artist: Artist = Column(ForeignKey("artists.id"))
+    is_feature: bool = Column(Boolean(), default=False)
 
-    song: ForeignKeyField = ForeignKeyField(Song, backref='song_artists')
-    artist: ForeignKeyField = ForeignKeyField(Artist, backref='song_artists')
-    is_feature: bool = BooleanField(default=False)
 
-
-class ArtistAlbum(BaseModel):
+class ArtistAlbum(Base):
     """A class representing the relationship between an album and an artist."""
+    id: int = Column(Integer(), primary_key=True)
+    album: Album = Column(ForeignKey("albums.id"))
+    artist: Artist = Column(ForeignKey("artists.id"))
 
-    album: ForeignKeyField = ForeignKeyField(Album, backref='album_artists')
-    artist: ForeignKeyField = ForeignKeyField(Artist, backref='album_artists')
 
-
-class AlbumSong(BaseModel):
+class AlbumSong(Base):
     """A class representing the relationship between an album and an song."""
-    album: ForeignKeyField = ForeignKeyField(Album, backref='album_artists')
-    song: ForeignKeyField = ForeignKeyField(Song, backref='album_artists')
+    album: Album = Column(ForeignKey("albums.id"))
+    song: Song = Column(ForeignKey("songs.id"))
 
 
-class LabelAlbum(BaseModel):
-    label: ForeignKeyField = ForeignKeyField(Label, backref='label_album')
-    album: ForeignKeyField = ForeignKeyField(Album, backref='label_album')
+class LabelAlbum(Base):
+    label: Label = Column(ForeignKey("labels.id"))
+    album: Album = Column(ForeignKey("albums.id"))
 
 
-class LabelArtist(BaseModel):
-    label: ForeignKeyField = ForeignKeyField(Label, backref='label_artist')
-    artist: ForeignKeyField = ForeignKeyField(Artist, backref='label_artists')
+class LabelArtist(Base):
+    label: Label = Column(ForeignKey("labels.id"))
+    artist: Artist = Column(ForeignKey("artists.id"))
 
 
 ALL_MODELS = [
