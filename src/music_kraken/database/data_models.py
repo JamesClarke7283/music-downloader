@@ -32,10 +32,10 @@ class Song(MainModel):
     __tablename__ = "songs"
     id: int = Column(Integer(), primary_key=True)
     title: str = Column(String(), nullable=True)
-    isrc: str = Column(String(),nullable=True)
-    length: int = Column(Integer(),nullable=True)
-    tracksort: int = Column(Integer(),nullable=True)
-    genre: str = Column(String(),nullable=True)
+    isrc: str = Column(String(), nullable=True)
+    length: int = Column(Integer(), nullable=True)
+    tracksort: int = Column(Integer(), nullable=True)
+    genre: str = Column(String(), nullable=True)
     
 
 class Album(MainModel):
