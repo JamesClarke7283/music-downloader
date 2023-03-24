@@ -85,34 +85,28 @@ class Lyrics(ObjectModel):
 
 class Source(Base):
     """A class representing a source of a song in the music database."""
-    ContentTypes = Union[Song, Album, Artist, Lyrics]
+    __tablename__ = "sources"
 
-    page: str = CharField()
-    url: str = CharField()
+    id: int = Column(Integer(), primary_key=True)
+    page: str = Column(String())
+    url: str = Column(String())
+    content_type: str = Column(String())
+    content_id: int = Column(Integer())
 
-    content_type: str = CharField()
-    content_id: int = CharField()
-    # content: ForeignKeyField = ForeignKeyField('self', backref='content_items', null=True)
+    __mapper_args__ = {
+        'polymorphic_on': content_type,
+        'polymorphic_identity': 'source'
+    }
 
-    @property
-    def content_object(self) -> Union[Song, Album, Artist]:
-        """Get the content associated with the source as an object."""
-        if self.content_type == 'Song':
-            return Song.get(Song.id == self.content_id)
-        if self.content_type == 'Album':
-            return Album.get(Album.id == self.content_id)
-        if self.content_type == 'Artist':
-            return Artist.get(Artist.id == self.content_id)
-        if self.content_type == 'Label':
-            return Label.get(Label.id == self.content_id)
-        if self.content_type == 'Lyrics':
-            return Lyrics.get(Lyrics.id == self.content_id)
-        
-    @content_object.setter
-    def content_object(self, value: Union[Song, Album, Artist]) -> None:
-        """Set the content associated with the source as an object."""
-        self.content_type = value.__class__.__name__
-        self.content_id = value.id
+    content: Union[Song, Album, Artist, Lyrics, Label] = relationship(
+        "ObjectModel",
+        primaryjoin=f"and_(Source.content_type=='{Song.__tablename__}', ObjectModel.id==Source.content_id)",
+        uselist=False,
+        viewonly=True,
+        lazy="joined"
+    )
+
+
 
 
 class SongArtist(Base):
@@ -157,24 +151,3 @@ ALL_MODELS = [
     Target,
     SongArtist
 ]
-
-if __name__ == "__main__":
-    database_1 = SqliteDatabase(":memory:")
-    database_1.create_tables([Song.Use(database_1)])
-    database_2 = SqliteDatabase(":memory:")
-    database_2.create_tables([Song.Use(database_2)])
-
-    # creating songs, adding it to db_2 if i is even, else to db_1
-    for i in range(100):
-        song = Song(name=str(i) + "hs")
-
-        db_to_use = database_2 if i % 2 == 0 else database_1
-        song.use(db_to_use).save()
-
-    print("database 1")
-    for song in Song.Use(database_1).select():
-        print(song.name)
-
-    print("database 2")
-    for song in Song.Use(database_1).select():
-        print(song.name)

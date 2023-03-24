@@ -30,6 +30,7 @@ class Database:
         with self.session() as session:
             session.add(obj)
             session.commit()
+
     
     def pushMany(self, *objects):
         """Adds a arbitrary number of elements to the database"""
@@ -54,4 +55,10 @@ class Database:
     def commit(self):
         """Commits changes made to pulled objects, to the database"""
         with self.session() as session:
+            session.commit()
+            
+    def delete(self, obj):
+        """Deletes an object from the database"""
+        with self.session() as session:
+            session.delete(obj)
             session.commit()
