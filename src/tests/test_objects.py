@@ -7,7 +7,6 @@ from pathlib import Path
 
 # Add the parent directory of the src package to the Python module search path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from music_kraken import objects
 
 """
@@ -168,6 +167,32 @@ class TestCollection(unittest.TestCase):
         song: objects.Song
         for song in self.collection:
             self.assertIn(song.unified_title, self.unified_titels)
+
+    def test_appending(self):
+        collection = objects.Collection(
+            element_type=objects.Song
+        )
+
+        res = collection.append(self.song_list[0])
+        self.assertEqual(res.was_in_collection, False)
+        self.assertEqual(res.current_element, self.song_list[0])
+
+        res = collection.append(self.song_list[1])
+        self.assertEqual(res.was_in_collection, True)
+        self.assertEqual(res.current_element, self.song_list[0])
+
+        res = collection.append(self.song_list[2])
+        self.assertEqual(res.was_in_collection, False)
+        self.assertEqual(res.current_element, self.song_list[2])
+
+        res = collection.append(self.song_list[3], merge_into_existing=False)
+        self.assertEqual(res.was_in_collection, True)
+        self.assertEqual(res.current_element, self.song_list[3])
+
+
+
+
+
 
 
 

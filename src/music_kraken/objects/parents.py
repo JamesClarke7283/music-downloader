@@ -1,12 +1,15 @@
 from collections import defaultdict
-from typing import Optional, Dict, Type, Tuple, List
+from typing import Optional, Dict, Type, Tuple, List, TYPE_CHECKING
 import uuid
+import random
 
 from ..utils.shared import (
     SONG_LOGGER as LOGGER
 )
 from .metadata import Metadata
 from .option import Options
+if TYPE_CHECKING:
+    from .collection import Collection
 
 
 class DatabaseObject:
@@ -29,6 +32,8 @@ class DatabaseObject:
         self.id: Optional[str] = _id
 
         self.dynamic = dynamic
+        
+        self.build_version = -1
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, type(self)):
@@ -60,6 +65,9 @@ class DatabaseObject:
         return list()
 
     def merge(self, other, override: bool = False):
+        if self is other:
+            return
+        
         if not isinstance(other, type(self)):
             LOGGER.warning(f"can't merge \"{type(other)}\" into \"{type(self)}\"")
             return
@@ -85,19 +93,20 @@ class DatabaseObject:
     @property
     def option_string(self) -> str:
         return self.__repr__()
-
-    def compile(self) -> bool:
-        """
-        compiles the recursive structures,
-
-        Args:
-            traceback (set, optional): Defaults to an empty set.
-
-        Returns:
-            bool: returns true if id has been found in set
-        """
+    
+    def _build_recursive_structures(self, build_version: int, merge: False):
         pass
 
+    def compile(self, merge_into: bool = False):
+        """
+        compiles the recursive structures,
+        and does depending on the object some other stuff.
+        
+        no need to override if only the recursive structure should be build.
+        override self.build_recursive_structures() instead
+        """
+        
+        self._build_recursive_structures(build_version=random.randint(0, 99999), merge=merge_into)
 
 
 class MainObject(DatabaseObject):
