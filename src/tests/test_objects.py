@@ -7,7 +7,6 @@ from pathlib import Path
 
 # Add the parent directory of the src package to the Python module search path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from music_kraken import objects
 
 """
@@ -168,6 +167,42 @@ class TestCollection(unittest.TestCase):
         song: objects.Song
         for song in self.collection:
             self.assertIn(song.unified_title, self.unified_titels)
+
+
+class TestCollectionAppending(unittest.TestCase):
+    def setUp(self):
+        self.song_list: objects.song = [
+            objects.Song(title="hasskrank"),
+            objects.Song(title="HaSSkrank"),
+            objects.Song(title="Suicideseason", isrc="uniqueID"),
+            objects.Song(title="same isrc different title", isrc="uniqueID")
+        ]
+        self.unified_titels = set(song.unified_title for song in self.song_list)
+
+    def test_appending(self):
+        collection = objects.Collection(
+            element_type=objects.Song,
+            data=self.song_list
+        )
+
+        res = collection.append(self.song_list[0])
+        self.assertEqual(res.was_in_collection, False)
+        self.assertEqual(res.current_element, self.song_list[0])
+
+        res = collection.append(self.song_list[1])
+        self.assertEqual(res.was_in_collection, True)
+        self.assertEqual(res.current_element, self.song_list[0])
+
+        res = collection.append(self.song_list[2])
+        self.assertEqual(res.was_in_collection, False)
+        self.assertEqual(res.current_element, self.song_list[2])
+
+        res = collection.append(self.song_list[3])
+        self.assertEqual(res.was_in_collection, True)
+        self.assertEqual(res.current_element, self.song_list[2])
+
+
+
 
 
 
