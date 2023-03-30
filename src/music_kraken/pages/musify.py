@@ -1,9 +1,8 @@
 from collections import defaultdict
-from typing import List, Optional, Union
+from typing import List, Optional, Type, Union
 import requests
 from bs4 import BeautifulSoup
 import pycountry
-import time
 from urllib.parse import urlparse
 from enum import Enum
 from dataclasses import dataclass
@@ -100,7 +99,7 @@ class Musify(Page):
         try:
             type_enum = MusifyTypes(path[1])
         except ValueError as e:
-            print(f"{path[1]} is not yet implemented, add it to MusifyTypes")
+            LOGGER.warning(f"{path[1]} is not yet implemented, add it to MusifyTypes")
             raise e
 
         return MusifyUrl(
@@ -257,20 +256,17 @@ class Musify(Page):
             else:
                 LOGGER.warning("got an unequal ammount than 3 small elements")
 
-        return cls.ALBUM_CACHE.append(Album(
+        return Album(
             _id=_id,
             title=title,
             source_list=source_list,
             date=ID3Timestamp(year=year),
             artist_list=artist_list
-        ))
+        )
 
     @classmethod
     def parse_contact_container(cls, contact_container_soup: BeautifulSoup) -> List[Union[Artist, Album]]:
-        # print(contact_container_soup.prettify)
         contacts = []
-
-        # print(contact_container_soup)
 
         contact: BeautifulSoup
         for contact in contact_container_soup.find_all("div", {"class": "contacts__item"}):
@@ -281,7 +277,6 @@ class Musify(Page):
                 url = anchor_soup.get("href")
 
                 if url is not None:
-                    # print(url)
                     if "artist" in url:
                         contacts.append(cls.parse_artist_contact(contact))
                     elif "release" in url:
@@ -301,7 +296,6 @@ class Musify(Page):
             anchor_list = playlist_details.find_all("a")
 
             if len(anchor_list) >= 2:
-                print(anchor_list)
                 # artists
                 artist_anchor: BeautifulSoup
                 for artist_anchor in anchor_list[:-1]:
@@ -535,14 +529,14 @@ class Musify(Page):
         else:
             LOGGER.debug("there is not even 1 footer in the album card")
 
-        return cls.ALBUM_CACHE.append(Album(
+        return Album(
             _id=_id,
             title=name,
             source_list=source_list,
             date=timestamp,
             album_type=album_type,
             album_status=album_status
-        ))
+        )
 
     @classmethod
     def get_discography(cls, url: MusifyUrl, artist_name: str = None, stop_at_level: int = 1) -> List[Album]:
@@ -572,7 +566,7 @@ class Musify(Page):
             album_source: Source
             if stop_at_level > 1:
                 for album_source in new_album.source_collection.get_sources_from_page(cls.SOURCE_TYPE):
-                    new_album.merge(cls.fetch_album_from_source(album_source, stop_at_level=stop_at_level-1))
+                    new_album.merge(cls._fetch_album_from_source(album_source, stop_at_level=stop_at_level-1))
                     
             discography.append(new_album)
 
@@ -709,7 +703,7 @@ class Musify(Page):
         )
 
     @classmethod
-    def fetch_artist_from_source(cls, source: Source, stop_at_level: int = 1) -> Artist:
+    def _fetch_artist_from_source(cls, source: Source, stop_at_level: int = 1) -> Artist:
         """
         fetches artist from source
 
@@ -851,7 +845,7 @@ class Musify(Page):
         )
 
     @classmethod
-    def fetch_album_from_source(cls, source: Source, stop_at_level: int = 1) -> Album:
+    def _fetch_album_from_source(cls, source: Source, stop_at_level: int = 1) -> Album:
         """
         fetches album from source:
         eg. 'https://musify.club/release/linkin-park-hybrid-theory-2000-188'
@@ -885,3 +879,15 @@ class Musify(Page):
         album.update_tracksort()
 
         return album
+
+    @classmethod
+    def _get_type_of_url(cls, url: str) -> Optional[Union[Type[Song], Type[Album], Type[Artist], Type[Label]]]:
+        url: MusifyUrl = cls.parse_url(url)
+        
+        if url.source_type == MusifyTypes.ARTIST:
+            return Artist
+        if url.source_type == MusifyTypes.RELEASE:
+            return Album
+        if url.source_type == MusifyTypes.SONG:
+            return Song
+        return None

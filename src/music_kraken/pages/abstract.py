@@ -1,4 +1,5 @@
 from typing import Optional, Union, Type, Dict
+from bs4 import BeautifulSoup
 import requests
 import logging
 
@@ -34,41 +35,49 @@ class Page:
 
     @classmethod
     def get_request(cls, url: str, accepted_response_codes: set = set((200,)), trie: int = 0) -> Optional[
-        requests.Request]:
+        requests.Response]:
+        retry = False
         try:
             r = cls.API_SESSION.get(url, timeout=cls.TIMEOUT)
         except requests.exceptions.Timeout:
-            return None
+            retry = True
 
-        if r.status_code in accepted_response_codes:
+        if not retry and r.status_code in accepted_response_codes:
             return r
 
-        LOGGER.warning(f"{cls.__name__} responded wit {r.status_code} at {url}. ({trie}-{cls.TRIES})")
+        LOGGER.warning(f"{cls.__name__} responded wit {r.status_code} at GET:{url}. ({trie}-{cls.TRIES})")
         LOGGER.debug(r.content)
 
-        if trie <= cls.TRIES:
+        if trie >= cls.TRIES:
             LOGGER.warning("to many tries. Aborting.")
+            return None
 
         return cls.get_request(url, accepted_response_codes, trie + 1)
 
     @classmethod
     def post_request(cls, url: str, json: dict, accepted_response_codes: set = set((200,)), trie: int = 0) -> Optional[
-        requests.Request]:
+        requests.Response]:
+        retry = False
         try:
             r = cls.API_SESSION.post(url, json=json, timeout=cls.TIMEOUT)
         except requests.exceptions.Timeout:
-            return None
+            retry = True
 
-        if r.status_code in accepted_response_codes:
+        if not retry and r.status_code in accepted_response_codes:
             return r
 
-        LOGGER.warning(f"{cls.__name__} responded wit {r.status_code} at {url}. ({trie}-{cls.TRIES})")
+        LOGGER.warning(f"{cls.__name__} responded wit {r.status_code} at POST:{url}. ({trie}-{cls.TRIES})")
         LOGGER.debug(r.content)
 
-        if trie <= cls.TRIES:
+        if trie >= cls.TRIES:
             LOGGER.warning("to many tries. Aborting.")
+            return None
 
         return cls.post_request(url, accepted_response_codes, trie + 1)
+
+    @classmethod
+    def get_soup_from_response(cls, r: requests.Response) -> BeautifulSoup:
+        return BeautifulSoup(r.content, "html.parser")
 
     class Query:
         def __init__(self, query: str):
@@ -157,9 +166,16 @@ class Page:
         
         new_music_object: DatabaseObject = type(music_object)()
 
+        had_sources = False
+
         source: Source
-        for source in music_object.source_collection:
+        for source in music_object.source_collection.get_sources_from_page(cls.SOURCE_TYPE):
             new_music_object.merge(cls._fetch_object_from_source(source=source, obj_type=type(music_object), stop_at_level=stop_at_level))
+            had_sources = True
+            
+        if not had_sources:
+            music_object.compile(merge_into=True)
+            return music_object
 
         collections = {
             Label: Collection(element_type=Label),
@@ -170,24 +186,45 @@ class Page:
 
         cls._clean_music_object(new_music_object, collections)
         
-        music_object.merge(new_music_object)            
-        # music_object.compile()
+        music_object.merge(new_music_object)     
+               
+        music_object.compile(merge_into=True)
 
         return music_object
+    
+    @classmethod
+    def fetch_object_from_source(cls, source: Source, stop_at_level: int = 2):
+        obj_type = cls._get_type_of_url(source.url)
+        if obj_type is None:
+            return None
+        
+        music_object = cls._fetch_object_from_source(source=source, obj_type=obj_type, stop_at_level=stop_at_level)
+        
+        collections = {
+            Label: Collection(element_type=Label),
+            Artist: Collection(element_type=Artist),
+            Album: Collection(element_type=Album),
+            Song: Collection(element_type=Song)
+        }
+
+        cls._clean_music_object(music_object, collections)  
+        music_object.compile(merge_into=True)
+        return music_object
+        
 
     @classmethod
     def _fetch_object_from_source(cls, source: Source, obj_type: Union[Type[Song], Type[Album], Type[Artist], Type[Label]], stop_at_level: int = 1):
         if obj_type == Artist:
-            return cls.fetch_artist_from_source(source=source, stop_at_level=stop_at_level)
+            return cls._fetch_artist_from_source(source=source, stop_at_level=stop_at_level)
         
         if obj_type == Song:
-            return cls.fetch_song_from_source(source=source, stop_at_level=stop_at_level)
+            return cls._fetch_song_from_source(source=source, stop_at_level=stop_at_level)
         
         if obj_type == Album:
-            return cls.fetch_album_from_source(source=source, stop_at_level=stop_at_level)
+            return cls._fetch_album_from_source(source=source, stop_at_level=stop_at_level)
         
         if obj_type == Label:
-            return cls.fetch_label_from_source(source=source, stop_at_level=stop_at_level)
+            return cls._fetch_label_from_source(source=source, stop_at_level=stop_at_level)
 
     @classmethod
     def _clean_music_object(cls, music_object: Union[Label, Album, Artist, Song], collections: Dict[Union[Type[Song], Type[Album], Type[Artist], Type[Label]], Collection]):
@@ -238,18 +275,21 @@ class Page:
         cls._clean_collection(song.main_artist_collection, collections)
 
     @classmethod
-    def fetch_song_from_source(cls, source: Source, stop_at_level: int = 1) -> Song:
+    def _fetch_song_from_source(cls, source: Source, stop_at_level: int = 1) -> Song:
         return Song()
-
+    
     @classmethod
-    def fetch_album_from_source(cls, source: Source, stop_at_level: int = 1) -> Album:
+    def _fetch_album_from_source(cls, source: Source, stop_at_level: int = 1) -> Album:
         return Album()
 
-
     @classmethod
-    def fetch_artist_from_source(cls, source: Source, stop_at_level: int = 1) -> Artist:
+    def _fetch_artist_from_source(cls, source: Source, stop_at_level: int = 1) -> Artist:
         return Artist()
 
     @classmethod
-    def fetch_label_from_source(cls, source: Source, stop_at_level: int = 1) -> Label:
+    def _fetch_label_from_source(cls, source: Source, stop_at_level: int = 1) -> Label:
         return Label()
+
+    @classmethod
+    def _get_type_of_url(cls, url: str) -> Optional[Union[Type[Song], Type[Album], Type[Artist], Type[Label]]]:
+        return None
