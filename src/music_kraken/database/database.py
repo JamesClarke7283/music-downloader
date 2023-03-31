@@ -1,18 +1,11 @@
+from ..utils.shared import DATABASE_LOGGER as LOGGER
+from . import data_models
+from .data_models import Base
+from .. import objects
+from ..objects import MainObject
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import pycountry
-import sys
-import os
-
-# Add the parent directory of the src package to the Python module search path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-print(sys.path)
-from music_kraken.database.data_models import Base
-from music_kraken.objects.parents import MainObject
-import music_kraken.objects as objects
-import music_kraken.database.data_models as data_models
 
 
 class Database:
@@ -29,12 +22,12 @@ class Database:
 
     @staticmethod
     def _set_matching_attributes(obj, db_obj):
-        for attr in dir(obj):
+        for attr in obj.SIMPLE_ATTRIBUTES.keys():
             if not attr.startswith('__') and hasattr(db_obj, attr):
-            try:
-                setattr(db_obj, attr, getattr(obj, attr))
-            except AttributeError as e:
-                print("WARNING: An attribute error occurred", e)
+                try:
+                    setattr(db_obj, attr, getattr(obj, attr))
+                except AttributeError as e:
+                    LOGGER.warning("An attribute error occurred" + str(e))
         return db_obj
 
     @staticmethod
@@ -42,8 +35,8 @@ class Database:
         """Converts a music_kraken object to a database object"""
         # Iterate through all classes in music_kraken.objects that inherit from MainObject
         for cls_name in dir(objects):
-            cls = getattr(objects, cls_name)
-            if isinstance(cls, type) and issubclass(cls, MainObject) and isinstance(obj, cls):
+            class_obj = getattr(objects, cls_name)
+            if isinstance(class_obj, type) and issubclass(class_obj, MainObject) and isinstance(obj, class_obj):
                 # Find the corresponding database model class in music_kraken.database.data_models
                 db_model_class_name = cls_name  # Assuming the class names are the same in both modules
                 if hasattr(data_models, db_model_class_name):
