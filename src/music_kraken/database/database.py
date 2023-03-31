@@ -1,11 +1,23 @@
+from typing import Dict, Optional, Set, Type, Iterable
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from ..utils.shared import DATABASE_LOGGER as LOGGER
 from . import data_models
 from .data_models import Base
 from .. import objects
-from ..objects import MainObject
+from ..objects import DatabaseObject
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+
+ALL_DATA_OBJECTS: Dict[Type[DatabaseObject], Type[Base]] = {
+    objects.Song: data_models.Song,
+    objects.Album: data_models.Album,
+    objects.Artist: data_models. Artist,
+    objects.Label: data_models.Label,
+    objects.Target: data_models.Target,
+    objects.Lyrics: data_models.Lyrics,
+    objects.Source: data_models.Source
+}
 
 
 class Database:
@@ -21,49 +33,60 @@ class Database:
         Base.metadata.create_all(self.engine)
 
     @staticmethod
-    def _set_matching_attributes(obj, db_obj):
-        for attr in obj.SIMPLE_ATTRIBUTES.keys():
-            if not attr.startswith('__') and hasattr(db_obj, attr):
-                try:
-                    setattr(db_obj, attr, getattr(obj, attr))
-                except AttributeError as e:
-                    LOGGER.warning("An attribute error occurred" + str(e))
-        return db_obj
+    def _set_matching_attributes(data_object: DatabaseObject, data_model: Base) -> Base:
+        model_attributes: Set[str] = set(attr for attr in dir(data_model))
 
-    @staticmethod
-    def obj_to_database_obj(obj):
+        data_model.id = data_object.id
+
+        attribute: str
+        for attribute in data_object.SIMPLE_ATTRIBUTES.keys():
+            if attribute not in model_attributes:
+                raise AttributeError(f"the attributes ({attribute}) of {type(DatabaseObject)} are not synced up with those of {type(data_model)}")
+            
+            setattr(data_model, attribute, getattr(data_object, attribute))
+
+        return data_model
+
+    @classmethod
+    def _obj_to_database_obj(cls, data_object: DatabaseObject) -> Base:
         """Converts a music_kraken object to a database object"""
         # Iterate through all classes in music_kraken.objects that inherit from MainObject
-        for cls_name in dir(objects):
-            class_obj = getattr(objects, cls_name)
-            if isinstance(class_obj, type) and issubclass(class_obj, MainObject) and isinstance(obj, class_obj):
-                # Find the corresponding database model class in music_kraken.database.data_models
-                db_model_class_name = cls_name  # Assuming the class names are the same in both modules
-                if hasattr(data_models, db_model_class_name):
-                    db_model_class = getattr(data_models, db_model_class_name)
-                    db_obj = db_model_class()
-                    Database._set_matching_attributes(obj, db_obj)
-                return db_obj
 
-        # If no matching database model class is found, return None
-        return None
+        model_type: Optional[Type[Base]] = ALL_DATA_OBJECTS.get(type(data_object))
+        if model_type is None:
+            return None
+
+        return cls._set_matching_attributes(data_object, model_type())
 
     def session(self):
         """Returns a SQLalchemy session using the database's engine"""
         session = sessionmaker(bind=self.engine)
         return session
 
-    def push(self, obj):
-        """Adds a single object element to the database"""
+    def push(self, data_object: DatabaseObject):
+        """
+        Adds a single object element to the database
+        """
+        model = self.__class__._obj_to_database_obj(data_object)
+        if model is None:
+            return
+
         with self.session() as session:
-            session.add(obj)
+            session.add(model)
             session.commit()
 
-    def pushMany(self, *objects):
-        """Adds a arbitrary number of elements to the database"""
+    def pushMany(self, *data_objects: Iterable[DatabaseObject]):
+        """
+        Adds a arbitrary number of elements to the database
+        """
+        
         with self.session() as session:
-            for obj in objects:
-                session.add(obj)
+            for data_object in data_objects:
+                model = self.__class__._obj_to_database_obj(data_object)
+                if model is None:
+                    continue
+
+                session.add(model)
             session.commit()
 
     def pull(self, obj, **filter_by):

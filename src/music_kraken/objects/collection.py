@@ -1,4 +1,4 @@
-from typing import List, Iterable, Dict
+from typing import List, Iterable, Dict, Type
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -23,7 +23,7 @@ class Collection:
 
     def __init__(self, data: List[DatabaseObject] = None, element_type=None, *args, **kwargs) -> None:
         # Attribute needs to point to
-        self.element_type = element_type
+        self.element_type: Type[DatabaseObject] = element_type
 
         self._data: List[DatabaseObject] = list()
 
