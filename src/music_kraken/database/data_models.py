@@ -1,8 +1,7 @@
-from typing import List, Union, Type, Optional
-from sqlalchemy import create_engine, Column, Integer, Boolean, String, Text, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy_utils import create_database, database_exists
+from typing import Union
+from sqlalchemy import Column, Integer, Boolean, String, Text, ForeignKey
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import relationship
 
 """
 **IMPORTANT**:
@@ -18,16 +17,7 @@ EVEN if that means to for example keep decimal values stored in strings.
 Base = declarative_base()
 
 
-class ObjectModel(Base):
-    id: str = Column(String(), primary_key=True)
-
-
-class MainModel(Base):
-    additional_arguments: str = Column(String(), nullable=True)
-    notes: str = Column(String(), nullable=True)
-
-
-class Song(MainModel):
+class Song(Base):
     """A class representing a song in the music database."""
     __tablename__ = "songs"
     id: int = Column(Integer(), primary_key=True)
@@ -36,9 +26,9 @@ class Song(MainModel):
     length: int = Column(Integer(), nullable=True)
     tracksort: int = Column(Integer(), nullable=True)
     genre: str = Column(String(), nullable=True)
-    
 
-class Album(MainModel):
+
+class Album(Base):
     """A class representing an album in the music database."""
     __tablename__ = "albums"
     id: int = Column(Integer(), primary_key=True)
@@ -52,8 +42,9 @@ class Album(MainModel):
     albumsort: int = Column(Integer(), nullable=True)
 
 
-class Artist(MainModel):
+class Artist(Base):
     """A class representing an artist in the music database."""
+    __tablename__ = "artists"
     id: int = Column(Integer(), primary_key=True)
     name: str = Column(String(), nullable=True)
     country: str = Column(String(), nullable=True)
@@ -62,22 +53,25 @@ class Artist(MainModel):
     general_genre: str = Column(String(), nullable=True)
 
 
-class Label(MainModel):
+class Label(Base):
+    __tablename__ = "labels"
     id: int = Column(Integer(), primary_key=True) 
     name: str = Column(String(), nullable=True)
 
 
-class Target(ObjectModel):
+class Target(Base):
     """A class representing a target of a song in the music database."""
     __tablename__ = "targets"
+    id: int = Column(Integer(), primary_key=True)
     file: str = Column(String())
     path: str = Column(String())
     song: Song = Column(ForeignKey("songs.id"))
 
 
-class Lyrics(ObjectModel):
+class Lyrics(Base):
     """A class representing lyrics of a song in the music database."""
     __tablename__ = "lyrics"
+    id: int = Column(Integer(), primary_key=True)
     text: str = Column(Text())
     language: str = Column(String())
     song: Song = Column(ForeignKey("songs.id"))
@@ -97,16 +91,15 @@ class Source(Base):
         'polymorphic_on': content_type,
         'polymorphic_identity': 'source'
     }
-
-    content: Union[Song, Album, Artist, Lyrics, Label] = relationship(
-        "ObjectModel",
-        primaryjoin=f"and_(Source.content_type=='{Song.__tablename__}', ObjectModel.id==Source.content_id)",
+"""
+    content = relationship(
+        "Base",
+        primaryjoin=f"and_(Source.content_type=='{Song.__tablename__}', Base.id==Source.content_id)",
         uselist=False,
         viewonly=True,
         lazy="joined"
     )
-
-
+"""
 
 
 class SongArtist(Base):
@@ -120,6 +113,7 @@ class SongArtist(Base):
 
 class ArtistAlbum(Base):
     """A class representing the relationship between an album and an artist."""
+    __tablename__ = "artist_albums"
     id: int = Column(Integer(), primary_key=True)
     album: Album = Column(ForeignKey("albums.id"))
     artist: Artist = Column(ForeignKey("artists.id"))
@@ -127,18 +121,31 @@ class ArtistAlbum(Base):
 
 class AlbumSong(Base):
     """A class representing the relationship between an album and an song."""
+    __tablename__ = "album_songs"
+    id: int = Column(Integer(), primary_key=True)
     album: Album = Column(ForeignKey("albums.id"))
     song: Song = Column(ForeignKey("songs.id"))
 
 
 class LabelAlbum(Base):
+    __tablename__ = "label_albums"
+    id: int = Column(Integer(), primary_key=True)
     label: Label = Column(ForeignKey("labels.id"))
     album: Album = Column(ForeignKey("albums.id"))
 
 
 class LabelArtist(Base):
+    __tablename__ = "label_artists"
+    id: int = Column(Integer(), primary_key=True)
     label: Label = Column(ForeignKey("labels.id"))
     artist: Artist = Column(ForeignKey("artists.id"))
+
+
+class ArtistSong(Base):
+    __tablename__ = "artist_songs"
+    id: int = Column(Integer(), primary_key=True)
+    artist: Artist = Column(ForeignKey("artists.id"))
+    song: Song = Column(ForeignKey("songs.id"))
 
 
 ALL_MODELS = [
