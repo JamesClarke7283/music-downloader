@@ -3,6 +3,8 @@ from sqlalchemy import Column, Integer, Boolean, String, Text, ForeignKey
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 
+from ..objects import FormattedText, ID3Timestamp
+
 """
 **IMPORTANT**:
 
@@ -49,14 +51,34 @@ class Artist(Base):
 
     name: str = Column(String(), nullable=True)
     country: str = Column(String(), nullable=True)
-    formed_in_date: str = Column(String(), nullable=True)
-    formed_in_format: str = Column(String(), nullable=True)
     general_genre: str = Column(String(), nullable=True)
+    
+    _formed_in_stamp: str = Column(String(), nullable=True)
+    _formed_in_format: str = Column(String(), nullable=True)
+
+    @property
+    def formed_in(self) -> ID3Timestamp:
+        return ID3Timestamp.strptime(self._formed_in_stamp, self._formed_in_format)
+    
+    @property.setter
+    def formed_in(self, id3_timestamp: ID3Timestamp):
+        self._formed_in_format = id3_timestamp.timeformat
+        self._formed_in_stamp = id3_timestamp.timestamp
+
+    _notes: str = Column(String(), nullable=True)
+    @property
+    def notes(self):
+        return FormattedText(html=self._notes)
+    
+    @property.setter
+    def notes(self, notes: FormattedText):
+        self._notes = notes.html
+
 
 
 class Label(Base):
     __tablename__ = "labels"
-    
+
     name: str = Column(String(), nullable=True)
 
 
@@ -66,7 +88,7 @@ class Target(Base):
 
     _file: str = Column(String())
     _path: str = Column(String())
-    song: Song = Column(ForeignKey("songs.id"))
+    Song: Song = Column(ForeignKey("songs.id"))
 
 
 class Lyrics(Base):
@@ -75,7 +97,7 @@ class Lyrics(Base):
 
     text: str = Column(Text())
     language: str = Column(String())
-    song: Song = Column(ForeignKey("songs.id"))
+    Song: Song = Column(ForeignKey("songs.id"))
 
 
 class Source(Base):
