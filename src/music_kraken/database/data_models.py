@@ -1,5 +1,5 @@
 from typing import Union
-from sqlalchemy import Column, Integer, Boolean, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, Boolean, String, Text, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -17,8 +17,10 @@ EVEN if that means to for example keep decimal values stored in strings.
 (not in my codebase though.)
 """
 
+
 class Base(declarative_base()):
     id: int = Column(Integer(), primary_key=True)
+
 
 class Song(Base):
     """A class representing a song in the music database."""
@@ -30,6 +32,33 @@ class Song(Base):
     tracksort: int = Column(Integer(), nullable=True)
     genre: str = Column(String(), nullable=True)
     Artist = relationship("Artist", secondary="song_artists")
+
+
+class Artwork(Base):
+    __tablename__ = "artworks"
+
+    album_id: int = Column(Integer(), ForeignKey("albums.id"), nullable=True)
+    artist_id: int = Column(Integer(), ForeignKey("artists.id"), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [album_id, artist_id],
+            ["albums.id", "artists.id"],
+            use_alter=True,
+            name="artwork_album_artist_fk"
+        ),
+    )
+
+    content_type: str = Column(String())
+    content_id: int = Column(Integer())
+
+    __mapper_args__ = {
+        'polymorphic_on': content_type,
+        'polymorphic_identity': 'artwork'
+    }
+
+    Album = relationship("Album", back_populates="artworks", foreign_keys=[album_id])
+    Artist = relationship("Artist", back_populates="artworks", foreign_keys=[artist_id])
 
 
 class Album(Base):
@@ -44,6 +73,8 @@ class Album(Base):
     date_format: str = Column(String(), nullable=True)
     barcode: str = Column(String(), nullable=True)
     albumsort: int = Column(Integer(), nullable=True)
+    # Is actually a list of artworks
+    Artwork = relationship("Artwork", back_populates="album", foreign_keys="Artwork.album_id")
 
 
 class Artist(Base):
@@ -53,14 +84,16 @@ class Artist(Base):
     name: str = Column(String(), nullable=True)
     country: str = Column(String(), nullable=True)
     general_genre: str = Column(String(), nullable=True)
-    
+    # Is actually a list of artworks
+    Artwork = relationship("Artwork", back_populates="artist", foreign_keys="Artwork.artist_id")
+
     _formed_in_stamp: str = Column(String(), nullable=True)
     _formed_in_format: str = Column(String(), nullable=True)
 
     @property
     def formed_in(self) -> ID3Timestamp:
         return ID3Timestamp.strptime(self._formed_in_stamp, self._formed_in_format)
-    
+
     @property.setter
     def formed_in(self, id3_timestamp: ID3Timestamp):
         self._formed_in_format = id3_timestamp.timeformat
@@ -70,11 +103,10 @@ class Artist(Base):
     @property
     def notes(self):
         return FormattedText(html=self._notes)
-    
+
     @property.setter
     def notes(self, notes: FormattedText):
         self._notes = notes.html
-
 
 
 class Label(Base):
