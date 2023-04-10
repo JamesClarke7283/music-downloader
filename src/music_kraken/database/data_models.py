@@ -1,9 +1,10 @@
-from typing import Union
+from typing import Optional, Union
 from sqlalchemy import Column, Integer, Boolean, String, Text, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 
-from ..objects import FormattedText, ID3Timestamp
+from ..objects import FormattedText, ID3Timestamp, AlbumStatus, AlbumType
+import pycountry
 
 """
 **IMPORTANT**:
@@ -27,11 +28,22 @@ class Song(Base):
     __tablename__ = "songs"
 
     title: str = Column(String(), nullable=True)
+    unified_title: str = Column(String(), nullable=True)
     isrc: str = Column(String(), nullable=True)
     length: int = Column(Integer(), nullable=True)
     tracksort: int = Column(Integer(), nullable=True)
     genre: str = Column(String(), nullable=True)
+
     Artist = relationship("Artist", secondary="song_artists")
+    _notes: str = Column(String(), nullable=True)
+
+    @property
+    def notes(self):
+        return FormattedText(html=self._notes)
+
+    @notes.setter
+    def notes(self, notes: FormattedText):
+        self._notes = notes.html
 
 
 class Artwork(Base):
@@ -65,16 +77,66 @@ class Album(Base):
     """A class representing an album in the music database."""
     __tablename__ = "albums"
 
-    title: str = Column(Integer(), nullable=True)
-    album_status: str = Column(String(), nullable=True)
-    album_type: str = Column(String(), nullable=True)
-    language: str = Column(String(), nullable=True)
-    date_string: str = Column(String(), nullable=True)
-    date_format: str = Column(String(), nullable=True)
+    title: str = Column(String(), nullable=True)
+    unified_title: str = Column(String(), nullable=True)
+    _album_status: str = Column(String(), nullable=True)
+    _album_type: str = Column(String(), nullable=True)
+    _language: str = Column(String(), nullable=True)
+    _date_string: str = Column(String(), nullable=True)
+    _date_format: str = Column(String(), nullable=True)
     barcode: str = Column(String(), nullable=True)
     albumsort: int = Column(Integer(), nullable=True)
     # Is actually a list of artworks
     Artwork = relationship("Artwork", back_populates="album", foreign_keys="Artwork.album_id")
+
+    Label = relationship("Label", back_populates="album", foreign_keys="LabelAlbum.label_id")
+    Artist = relationship("Artist", back_populates="album", foreign_keys="ArtistAlbum.artist_id")
+
+    _notes: str = Column(String(), nullable=True)
+
+    @property
+    def notes(self):
+        return FormattedText(html=self._notes)
+
+    @notes.setter
+    def notes(self, notes: FormattedText):
+        self._notes = notes.html
+
+    @property
+    def album_status(self):
+        return AlbumStatus(self._album_status)
+
+    @album_status.setter
+    def album_status(self, status: AlbumStatus):
+        self._album_status = status.value
+
+    @property
+    def album_type(self):
+        return AlbumType(self._album_type)
+
+    @album_type.setter
+    def album_type(self, album_type: AlbumType):
+        self._album_type = album_type.value
+
+    @property
+    def language(self):
+        return pycountry.languages.get(alpha_3=self._language)
+
+    @language.setter
+    def language(self, language: Optional[pycountry.languages]):
+        if language is None:
+            self._language = None
+        else:
+            self._language = language.alpha_3
+    
+    @property
+    def date(self) -> ID3Timestamp:
+        return ID3Timestamp.strptime(self._date_string, self._date_format)
+
+    @date.setter
+    def date(self, id3_timestamp: ID3Timestamp):
+        self._date_format = id3_timestamp.timeformat
+        self._date_string = id3_timestamp.timestamp
 
 
 class Artist(Base):
@@ -94,7 +156,7 @@ class Artist(Base):
     def formed_in(self) -> ID3Timestamp:
         return ID3Timestamp.strptime(self._formed_in_stamp, self._formed_in_format)
 
-    @property.setter
+    @formed_in.setter
     def formed_in(self, id3_timestamp: ID3Timestamp):
         self._formed_in_format = id3_timestamp.timeformat
         self._formed_in_stamp = id3_timestamp.timestamp
@@ -104,7 +166,7 @@ class Artist(Base):
     def notes(self):
         return FormattedText(html=self._notes)
 
-    @property.setter
+    @notes.setter
     def notes(self, notes: FormattedText):
         self._notes = notes.html
 
