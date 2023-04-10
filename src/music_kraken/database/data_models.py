@@ -29,6 +29,7 @@ class Song(Base):
     length: int = Column(Integer(), nullable=True)
     tracksort: int = Column(Integer(), nullable=True)
     genre: str = Column(String(), nullable=True)
+    Artist = relationship("Artist", secondary="song_artists")
 
 
 class Album(Base):

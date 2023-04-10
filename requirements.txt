@@ -11,3 +11,5 @@ pandoc~=2.3
 SQLAlchemy
 sqlalchemy-utils
 setuptools~=60.2.0
+tqdm~=4.65.0
+ffmpeg-python~=0.2.0

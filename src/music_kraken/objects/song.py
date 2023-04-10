@@ -1,34 +1,21 @@
-import os
 from typing import List, Optional, Dict, Tuple
-import pycountry
-from collections import defaultdict
 
+import pycountry
+
+from .album import AlbumType, AlbumStatus
+from .collection import Collection
+from .formatted_text import FormattedText
+from .lyrics import Lyrics
 from .metadata import (
     Mapping as id3Mapping,
     ID3Timestamp,
     Metadata
 )
-from ..utils.shared import (
-    MUSIC_DIR,
-    DATABASE_LOGGER as LOGGER
-)
-from ..utils.string_processing import unify
-from .parents import (
-    DatabaseObject,
-    MainObject
-)
-from .source import (
-    Source,
-    SourceTypes,
-    SourcePages,
-    SourceCollection
-)
-from .formatted_text import FormattedText
-from .collection import Collection
-from .album import AlbumType, AlbumStatus
-from .lyrics import Lyrics
-from .target import Target
 from .option import Options
+from .parents import MainObject
+from .source import Source, SourceCollection
+from .target import Target
+from ..utils.string_processing import unify
 
 """
 All Objects dependent 
@@ -192,7 +179,7 @@ class Song(MainObject):
         if len(self.album_collection) == 0:
             return f"{self.tracksort}"
         
-        return f"{self.tracksort}/{len(self.album_collection[0].tracklist) or 1}"
+        return f"{self.tracksort}/{len(self.album_collection[0].song_collection) or 1}"
 
 
 """
@@ -298,7 +285,7 @@ class Album(MainObject):
         return Metadata({
             id3Mapping.ALBUM: [self.title],
             id3Mapping.COPYRIGHT: [self.copyright],
-            id3Mapping.LANGUAGE: [self.iso_639_2_language],
+            id3Mapping.LANGUAGE: [self.iso_639_2_lang],
             id3Mapping.ALBUM_ARTIST: [a.name for a in self.artist_collection],
             id3Mapping.DATE: [self.date.timestamp]
         })
@@ -331,6 +318,9 @@ class Album(MainObject):
         :return:
         """
 
+        if self.song_collection.empty:
+            return
+
         tracksort_map: Dict[int, Song] = {
             song.tracksort: song for song in self.song_collection if song.tracksort is not None
         }
@@ -343,7 +333,22 @@ class Album(MainObject):
             I ONLY modify the `Collection._data` attribute directly, 
             to bypass the mapping of the attributes, because I will add the item in the next step
             """
-            self.song_collection._data.remove(song)
+
+            """
+            but for some reason, neither 
+            `self.song_collection._data.index(song)`
+            `self.song_collection._data.remove(song)`
+            get the right object.
+            
+            I have NO FUCKING CLUE why xD
+            But I just implemented it myself.
+            """
+            for old_index, temp_song in enumerate(self.song_collection._data):
+                if song is temp_song:
+                    break
+
+            # the list can't be empty
+            del self.song_collection._data[old_index]
             self.song_collection._data.insert(index, song)
 
         # fill in the empty tracksort attributes
@@ -533,7 +538,7 @@ class Artist(MainObject):
             is_split=True,
             albumsort=666,
             dynamic=True,
-            song_list=self.feature_song_collection.copy()
+            song_list=self.feature_song_collection.shallow_list
         )
 
     def get_all_songs(self) -> List[Song]:
